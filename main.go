@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 	"time"
 )
 
-var Version = "1.3.0"
+var Version = "1.4.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -67,10 +68,20 @@ func (c *Client) req(ctx context.Context, method, path string, body interface{})
 }
 
 func loadConfig() map[string]string {
-	return map[string]string{
+	cfg := map[string]string{
 		"endpoint": os.Getenv("TARS_MCP_ENDPOINT"),
 		"api_key":  os.Getenv("TARS_MCP_API_KEY"),
 	}
+	if cfg["endpoint"] != "" {
+		if u, err := url.Parse(cfg["endpoint"]); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			logger.Error("invalid endpoint URL", map[string]interface{}{"endpoint": cfg["endpoint"]})
+			cfg["endpoint"] = ""
+		}
+	}
+	if cfg["api_key"] == "" {
+		logger.Info("api_key is empty, running without authentication", map[string]interface{}{})
+	}
+	return cfg
 }
 
 type Logger struct{}

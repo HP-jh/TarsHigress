@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -107,4 +108,22 @@ func TestStructuredLogger(t *testing.T) {
 	l := Logger{}
 	l.Info("test", map[string]interface{}{"key": "value"})
 	l.Error("test-err", map[string]interface{}{"key": "value"})
+}
+
+func TestConfigValidation_InvalidURL(t *testing.T) {
+	os.Setenv("TARS_MCP_ENDPOINT", "not-a-url")
+	defer os.Unsetenv("TARS_MCP_ENDPOINT")
+	cfg := loadConfig()
+	if cfg["endpoint"] != "" {
+		t.Fatalf("expected empty endpoint for invalid URL, got %s", cfg["endpoint"])
+	}
+}
+
+func TestConfigValidation_ValidURL(t *testing.T) {
+	os.Setenv("TARS_MCP_ENDPOINT", "https://example.com")
+	defer os.Unsetenv("TARS_MCP_ENDPOINT")
+	cfg := loadConfig()
+	if cfg["endpoint"] != "https://example.com" {
+		t.Fatalf("expected valid endpoint, got %s", cfg["endpoint"])
+	}
 }
