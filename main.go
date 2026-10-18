@@ -8,29 +8,23 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
-	"math/rand"
-	"strconv"
 	"time"
 )
 
-var Version = "1.2.0"
+var Version = "1.3.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
 	Endpoint string
 	APIKey   string
 	Client   *http.Client
-}
-
-
-
-func generateRequestID() string {
-	return strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + strconv.Itoa(rand.Intn(10000))
 }
 
 func NewClient(endpoint, apiKey string) *Client {
@@ -79,6 +73,28 @@ func loadConfig() map[string]string {
 	}
 }
 
+type Logger struct{}
+
+func (l Logger) Info(msg string, fields map[string]interface{}) {
+	entry := map[string]interface{}{"time": time.Now().UTC().Format(time.RFC3339), "level": "info", "msg": msg}
+	for k, v := range fields { entry[k] = v }
+	b, _ := json.Marshal(entry)
+	log.Println(string(b))
+}
+
+func (l Logger) Error(msg string, fields map[string]interface{}) {
+	entry := map[string]interface{}{"time": time.Now().UTC().Format(time.RFC3339), "level": "error", "msg": msg}
+	for k, v := range fields { entry[k] = v }
+	b, _ := json.Marshal(entry)
+	log.Println(string(b))
+}
+
+var logger = Logger{}
+
+func generateRequestID() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + strconv.Itoa(rand.Intn(10000))
+}
+
 func main() {
 	version := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -88,7 +104,7 @@ func main() {
 	}
 	cfg := loadConfig()
 	client := NewClient(cfg["endpoint"], cfg["api_key"])
-	log.Printf("[%s] starting v%s endpoint=%s", RepoName, Version, cfg["endpoint"])
+	logger.Info("starting", map[string]interface{}{"name": RepoName, "version": Version, "endpoint": cfg["endpoint"]})
 	mode := os.Getenv("TARS_MCP_MODE")
 	if mode == "" { mode = "stdio" }
 	srv := &http.Server{Addr: ":8080", ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
@@ -99,16 +115,18 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Printf("[%s] shutting down", RepoName)
+		logger.Info("shutting down", map[string]interface{}{"name": RepoName})
 		_ = srv.Close()
 	}()
 	if mode == "stdio" {
+		logger.Info("stdio mode", map[string]interface{}{"name": RepoName})
 		runStdioServer(client)
 		return
 	}
-	log.Printf("[%s] HTTP listening on %s", RepoName, srv.Addr)
+	logger.Info("http listening", map[string]interface{}{"name": RepoName, "addr": srv.Addr})
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+		logger.Error("server error", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
 	}
 }
 
@@ -206,7 +224,7 @@ func invokeHandler(w http.ResponseWriter, r *http.Request, client *Client) {
 }
 
 func runStdioServer(client *Client) {
-	log.Printf("[%s] stdio mode", RepoName)
+	logger.Info("stdio mode", map[string]interface{}{"name": RepoName})
 	dec := json.NewDecoder(os.Stdin)
 	enc := json.NewEncoder(os.Stdout)
 	for {

@@ -102,3 +102,9 @@ func TestRequestIDPropagation(t *testing.T) {
 		t.Fatalf("expected request ID to propagate, got %s", w.Header().Get("X-Request-ID"))
 	}
 }
+
+func TestStructuredLogger(t *testing.T) {
+	l := Logger{}
+	l.Info("test", map[string]interface{}{"key": "value"})
+	l.Error("test-err", map[string]interface{}{"key": "value"})
+}
