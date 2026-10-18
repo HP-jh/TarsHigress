@@ -14,12 +14,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"strings"
 	"syscall"
 	"time"
 )
 
-var Version = "1.6.0"
+var Version = "1.7.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -120,9 +121,22 @@ func (l Logger) Error(msg string, fields map[string]interface{}) {
 }
 
 var logger = Logger{}
+var requestCount int64
+var errorCount int64
+
 
 func generateRequestID() string {
 	return strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + strconv.Itoa(rand.Intn(10000))
+}
+
+
+func metricsHandler(w http.ResponseWriter, r *http.Request, client *Client) {
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"requests":  atomic.LoadInt64(&requestCount),
+		"errors":    atomic.LoadInt64(&errorCount),
+		"version":   Version,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func main() {
@@ -140,6 +154,7 @@ func main() {
 	srv := &http.Server{Addr: ":8080", ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { withClient(client, healthHandler)(w, r) })
 	http.HandleFunc("/tools", func(w http.ResponseWriter, r *http.Request) { withClient(client, toolsHandler)(w, r) })
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) { withClient(client, metricsHandler)(w, r) })
 	http.HandleFunc("/invoke", func(w http.ResponseWriter, r *http.Request) { withClient(client, invokeHandler)(w, r) })
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -180,6 +195,7 @@ func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Cli
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		atomic.AddInt64(&requestCount, 1)
 		fn(w, r, client)
 	}
 }
@@ -238,6 +254,7 @@ func invokeHandler(w http.ResponseWriter, r *http.Request, client *Client) {
 	case "higress_routes":
 		result, err := client.req(ctx, "GET", "/v1/routes", nil)
 		if err != nil {
+			atomic.AddInt64(&errorCount, 1)
 			w.WriteHeader(http.StatusBadGateway)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("调用失败：%v", err)})
 			return
@@ -246,6 +263,7 @@ func invokeHandler(w http.ResponseWriter, r *http.Request, client *Client) {
 	case "higress_health":
 		result, err := client.req(ctx, "GET", "/v1/health", nil)
 		if err != nil {
+			atomic.AddInt64(&errorCount, 1)
 			w.WriteHeader(http.StatusBadGateway)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": fmt.Sprintf("调用失败：%v", err)})
 			return

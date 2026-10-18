@@ -160,3 +160,14 @@ func TestRetryMechanism(t *testing.T) {
 	if res["status"] != "ok" { t.Fatalf("expected ok, got %v", res["status"]) }
 	if callCount < 2 { t.Fatalf("expected retries, got %d calls", callCount) }
 }
+
+func TestMetricsEndpoint(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	withClient(client, metricsHandler)(w, req)
+	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil { t.Fatal(err) }
+	if _, ok := resp["requests"]; !ok { t.Fatal("expected requests field") }
+}
