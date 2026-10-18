@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var Version = "1.4.0"
+var Version = "1.5.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -126,8 +126,12 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		logger.Info("shutting down", map[string]interface{}{"name": RepoName})
-		_ = srv.Close()
+		logger.Info("shutting down gracefully", map[string]interface{}{"name": RepoName})
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			logger.Error("shutdown error", map[string]interface{}{"error": err.Error()})
+		}
 	}()
 	if mode == "stdio" {
 		logger.Info("stdio mode", map[string]interface{}{"name": RepoName})

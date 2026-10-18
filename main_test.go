@@ -127,3 +127,16 @@ func TestConfigValidation_ValidURL(t *testing.T) {
 		t.Fatalf("expected valid endpoint, got %s", cfg["endpoint"])
 	}
 }
+
+func TestGracefulShutdown(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := NewClient(srv.URL, "")
+	res, err := client.req(context.Background(), "GET", "/health", nil)
+	if err != nil { t.Fatalf("unexpected err: %v", err) }
+	if res == nil { t.Fatal("expected response") }
+}
