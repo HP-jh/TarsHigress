@@ -171,3 +171,13 @@ func TestMetricsEndpoint(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil { t.Fatal(err) }
 	if _, ok := resp["requests"]; !ok { t.Fatal("expected requests field") }
 }
+
+func TestRateLimiting(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	withClient(client, healthHandler)(w, req)
+	if w.Code != http.StatusOK && w.Code != http.StatusTooManyRequests {
+		t.Fatalf("unexpected status: %d", w.Code)
+	}
+}

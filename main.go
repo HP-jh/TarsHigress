@@ -14,13 +14,14 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"strings"
 	"syscall"
 	"time"
 )
 
-var Version = "1.7.0"
+var Version = "1.8.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -123,6 +124,29 @@ func (l Logger) Error(msg string, fields map[string]interface{}) {
 var logger = Logger{}
 var requestCount int64
 var errorCount int64
+type RateLimiter struct {
+	mu       sync.Mutex
+	requests int
+	window   time.Time
+}
+
+func (rl *RateLimiter) Allow() bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	if now.Sub(rl.window) > time.Minute {
+		rl.window = now
+		rl.requests = 0
+	}
+	if rl.requests >= 60 {
+		return false
+	}
+	rl.requests++
+	return true
+}
+
+var rateLimiter = &RateLimiter{}
+
 
 
 func generateRequestID() string {
@@ -181,6 +205,11 @@ func main() {
 
 func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Client)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !rateLimiter.Allow() {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "请求太频繁，请稍后再试"})
+			return
+		}
 		reqID := r.Header.Get("X-Request-ID")
 		if reqID == "" { reqID = generateRequestID() }
 		w.Header().Set("X-Request-ID", reqID)
