@@ -81,3 +81,24 @@ func TestSecurityHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestIDHeader(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	withClient(client, healthHandler)(w, req)
+	if w.Header().Get("X-Request-ID") == "" {
+		t.Fatal("expected X-Request-ID header")
+	}
+}
+
+func TestRequestIDPropagation(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("X-Request-ID", "test-req-123")
+	w := httptest.NewRecorder()
+	withClient(client, healthHandler)(w, req)
+	if w.Header().Get("X-Request-ID") != "test-req-123" {
+		t.Fatalf("expected request ID to propagate, got %s", w.Header().Get("X-Request-ID"))
+	}
+}

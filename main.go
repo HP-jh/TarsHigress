@@ -13,16 +13,24 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"math/rand"
+	"strconv"
 	"time"
 )
 
-var Version = "1.1.0"
+var Version = "1.2.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
 	Endpoint string
 	APIKey   string
 	Client   *http.Client
+}
+
+
+
+func generateRequestID() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + strconv.Itoa(rand.Intn(10000))
 }
 
 func NewClient(endpoint, apiKey string) *Client {
@@ -106,6 +114,9 @@ func main() {
 
 func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Client)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		reqID := r.Header.Get("X-Request-ID")
+		if reqID == "" { reqID = generateRequestID() }
+		w.Header().Set("X-Request-ID", reqID)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
