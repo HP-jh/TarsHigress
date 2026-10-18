@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var Version = "1.5.0"
+var Version = "1.6.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -40,6 +40,25 @@ func NewClient(endpoint, apiKey string) *Client {
 }
 
 func (c *Client) req(ctx context.Context, method, path string, body interface{}) (map[string]interface{}, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			delay := time.Duration(1<<attempt) * time.Second
+			logger.Info("retrying request", map[string]interface{}{"attempt": attempt, "delay": delay.String()})
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		result, err := c.doReq(ctx, method, path, body)
+		if err == nil { return result, nil }
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (c *Client) doReq(ctx context.Context, method, path string, body interface{}) (map[string]interface{}, error) {
 	var bodyR io.Reader
 	if body != nil {
 		b, _ := json.Marshal(body)

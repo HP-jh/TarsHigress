@@ -140,3 +140,23 @@ func TestGracefulShutdown(t *testing.T) {
 	if err != nil { t.Fatalf("unexpected err: %v", err) }
 	if res == nil { t.Fatal("expected response") }
 }
+
+func TestRetryMechanism(t *testing.T) {
+	callCount := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount < 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := NewClient(srv.URL, "")
+	res, err := client.req(context.Background(), "GET", "/health", nil)
+	if err != nil { t.Fatalf("unexpected err: %v", err) }
+	if res["status"] != "ok" { t.Fatalf("expected ok, got %v", res["status"]) }
+	if callCount < 2 { t.Fatalf("expected retries, got %d calls", callCount) }
+}
