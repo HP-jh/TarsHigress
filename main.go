@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var Version = "1.9.0"
+var Version = "1.10.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -89,10 +89,15 @@ func (c *Client) doReq(ctx context.Context, method, path string, body interface{
 }
 
 func loadConfig() map[string]string {
-	cfg := map[string]string{
-		"endpoint": os.Getenv("TARS_MCP_ENDPOINT"),
-		"api_key":  os.Getenv("TARS_MCP_API_KEY"),
+	cfg := map[string]string{}
+	if data, err := os.ReadFile("config.json"); err == nil {
+		var fileCfg map[string]string
+		if err := json.Unmarshal(data, &fileCfg); err == nil {
+			for k, v := range fileCfg { cfg[k] = v }
+		}
 	}
+	if v := os.Getenv("TARS_MCP_ENDPOINT"); v != "" { cfg["endpoint"] = v }
+	if v := os.Getenv("TARS_MCP_API_KEY"); v != "" { cfg["api_key"] = v }
 	if cfg["endpoint"] != "" {
 		if u, err := url.Parse(cfg["endpoint"]); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			logger.Error("invalid endpoint URL", map[string]interface{}{"endpoint": cfg["endpoint"]})

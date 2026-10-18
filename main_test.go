@@ -199,3 +199,12 @@ func TestHealthLatency(t *testing.T) {
 	if !ok { t.Fatal("expected upstream") }
 	if _, ok := up["latency_ms"]; !ok { t.Fatal("expected latency_ms") }
 }
+
+func TestConfigFile(t *testing.T) {
+	os.WriteFile("config.json", []byte(`{"endpoint":"https://file.example.com","api_key":"file-key"}`), 0644)
+	defer os.Remove("config.json")
+	cfg := loadConfig()
+	if cfg["endpoint"] != "https://file.example.com" {
+		t.Fatalf("expected file endpoint, got %s", cfg["endpoint"])
+	}
+}
