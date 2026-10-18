@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var Version = "1.8.0"
+var Version = "1.9.0"
 const RepoName = "TarsHigress"
 
 type Client struct {
@@ -232,8 +232,15 @@ func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Cli
 func healthHandler(w http.ResponseWriter, r *http.Request, client *Client) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	up := map[string]interface{}{"healthy": false}
-	if _, err := client.req(ctx, "GET", "/health", nil); err == nil { up["healthy"] = true }
+	start := time.Now()
+	up := map[string]interface{}{"healthy": false, "latency_ms": 0}
+	if _, err := client.req(ctx, "GET", "/health", nil); err == nil {
+		up["healthy"] = true
+		up["latency_ms"] = time.Since(start).Milliseconds()
+	} else {
+		up["error"] = err.Error()
+		up["latency_ms"] = time.Since(start).Milliseconds()
+	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok", "version": Version, "name": RepoName, "upstream": up,
 		"time": time.Now().UTC().Format(time.RFC3339),

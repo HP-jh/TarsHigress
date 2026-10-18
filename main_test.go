@@ -181,3 +181,21 @@ func TestRateLimiting(t *testing.T) {
 		t.Fatalf("unexpected status: %d", w.Code)
 	}
 }
+
+func TestHealthLatency(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := NewClient(srv.URL, "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	withClient(client, healthHandler)(w, req)
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil { t.Fatal(err) }
+	up, ok := resp["upstream"].(map[string]interface{})
+	if !ok { t.Fatal("expected upstream") }
+	if _, ok := up["latency_ms"]; !ok { t.Fatal("expected latency_ms") }
+}
