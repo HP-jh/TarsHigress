@@ -61,3 +61,23 @@ func TestClientReq_MockServer(t *testing.T) {
 	if err != nil { t.Fatalf("unexpected err: %v", err) }
 	if res["status"] != "ok" { t.Fatalf("expected ok, got %v", res["status"]) }
 }
+
+func TestSecurityHeaders(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	withClient(client, healthHandler)(w, req)
+	headers := []string{
+		"X-Content-Type-Options",
+		"X-Frame-Options",
+		"Content-Security-Policy",
+		"Strict-Transport-Security",
+		"Referrer-Policy",
+		"Permissions-Policy",
+	}
+	for _, h := range headers {
+		if w.Header().Get(h) == "" {
+			t.Fatalf("missing security header: %s", h)
+		}
+	}
+}
